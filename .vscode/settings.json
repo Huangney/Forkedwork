@@ -1,0 +1,17 @@
+{
+    "python-envs.defaultEnvManager": "ms-python.python:conda",
+    "python-envs.defaultPackageManager": "ms-python.python:conda",
+    "python-envs.pythonProjects": [],
+    "files.exclude": {
+        "**/*.{map,list,hex,bin,elf}": true,
+        "**/Drivers": true,
+        "**/Middlewares": true,
+        "**/*.{ld,s}": true,
+        "**/Core/Startup": true,
+        "**/cmake-build-*": true,
+        "**/.mxproject": true,
+        "**/*.ioc": false,
+        "**/build": true,
+        "**/MDK-ARM": true,
+    }
+}

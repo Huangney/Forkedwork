@@ -1,0 +1,50 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "CMake: build", // 这个名字必须和 launch.json 里的 preLaunchTask 一致
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build",
+                "${command:cmake.buildDirectory}" // 自动识别你的 build 文件夹位置
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": "$gcc", // 这样代码写错时，错误会直接标红在代码行上
+            "detail": "使用 CMake 构建当前项目",
+            "presentation": {
+                "echo": true,
+                "reveal": "silent",    // 重点：只有出错时才弹出来，成功就不干扰你
+                "focus": false,         // 重点：不把焦点抢过来
+                "panel": "shared",      // 使用共享面板
+                "showReuseMessage": false,
+                "clear": true
+            }
+        },
+        {
+            "label": "Check Connection (Auto-Select)",
+            "type": "shell",
+            "command": "openocd",
+            "args": [
+                "-f", "interface/${input:adapterType}.cfg",
+                "-f", "target/stm32f4x.cfg",
+                "-c", "init; exit"
+            ],
+            "group": "none",
+            "presentation": { "reveal": "always", "panel": "dedicated" },
+            "problemMatcher": []
+        },
+    ],
+    "inputs": [
+    {
+        "id": "adapterType",
+        "type": "pickString",
+        "description": "选择你的调试器类型",
+        "options": ["stlink", "cmsis-dap"],
+        "default": "stlink"
+    }
+]
+}

@@ -1,0 +1,60 @@
+{
+    "version": "0.2.0",
+    "configurations": 
+    [
+        {
+            "name": "Reactor-46Hex Debug",
+            "cwd": "${workspaceRoot}",
+            "executable": "${command:cmake.launchTargetPath}",
+            "request": "launch",
+            "type": "cortex-debug",
+            "liveWatch": 
+            {
+                "enabled": true,
+                "samplesPerSecond": 4 // 每秒刷新次数，不宜过高，否则会抢占 SWD 带宽
+            },
+            "servertype": "openocd",
+            "postStartSessionCommands": 
+            [
+                "monitor log_level 1",
+                "monitor poll off",
+            ],
+            "configFiles": 
+            [
+                "${workspaceRoot}/ocd_cfg/cmsis-dap.cfg",
+            ],
+            "searchDir": [],
+            "runToEntryPoint": "MainFrameCpp",
+            "showDevDebugOutput": "none",
+            "preLaunchTask": "CMake: build",
+            "rtos": "FreeRTOS",
+            "internalConsoleOptions": "openOnSessionStart",
+            "rttConfig": 
+            {
+                "enabled": true,
+                "address": "auto",
+                "decoders": 
+                [
+                    {
+                        "label": "RTT Channel 0",
+                        "port": 0,
+                        "type": "console"
+                    }
+                ]
+           },
+            "preRestartCommands": ["monitor reset halt"],
+        },
+    ],
+    "inputs": [
+        {
+            "id": "adapterSelection",
+            "type": "pickString",
+            "description": "请选择当前的烧录器类型:",
+            "options": [
+                "stlink",
+                "cmsis-dap",
+            ],
+            "default": "cmsis-dap"
+        }
+    ]
+}
