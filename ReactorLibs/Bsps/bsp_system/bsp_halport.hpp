@@ -2,9 +2,6 @@
 
 #define USE_REAL_HAL
 
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 
 /* ==================================================================
@@ -56,31 +53,28 @@ extern "C" {
 
 #endif 
 
-typedef struct
+
+namespace Hardware
 {
+    extern float MainFreq_MHz;
+    
     /***---------------     框架CAN    ---------------***/
     /// @brief 框架所用CAN句柄
-    CAN_HandleTypeDef* hcan_main;
+    extern CAN_HandleTypeDef* hcan_main;
     /// @brief 框架所用CAN句柄
-    CAN_HandleTypeDef* hcan_sub;
+    extern CAN_HandleTypeDef* hcan_sub;
 
     /***---------------     框架串口    ---------------***/
     /// @brief 工控机串口
-    UART_HandleTypeDef* huart_host;
+    extern UART_HandleTypeDef* huart_host;
     /// @brief 遥控器串口
-    UART_HandleTypeDef* huart_farcon;
+    extern UART_HandleTypeDef* huart_farcon;
     /// @brief 里程计串口
-    UART_HandleTypeDef* huart_odom;
+    extern UART_HandleTypeDef* huart_odom;
     /// @brief 其他串口
-    UART_HandleTypeDef* huart_other;
+    extern UART_HandleTypeDef* huart_other;
 
     /***---------------     框架定时器    ---------------***/
     /// @brief WS2812灯带定时器
-    TIM_HandleTypeDef* htim_led;
-} Hardware_t;
-
-extern Hardware_t Hardware;
-
-#ifdef __cplusplus
-}
-#endif
+    extern TIM_HandleTypeDef* htim_led;
+};

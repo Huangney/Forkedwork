@@ -39,7 +39,8 @@ void MainFrameCpp()
     core.RegistGraph(example_graph);
     core.Enable(0);         // 启动状态机核心，指定初始状态图为0号图
 
-    test_motor_0.Init(&hcan1, 1, PID_PosControl);
+    test_motor_0.Init(Hardware::hcan_main, 1, PID_PosControl);
+    
     test_motor_0.speed_pid.Init(10.0f, 0.0f, 0.0f);
     test_motor_0.position_pid.Init(0.035f, 0.0f, 0.0f);
 

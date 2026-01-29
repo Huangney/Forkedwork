@@ -2,7 +2,6 @@
 #define _CHASSIS_HPP_
 
 #include "stm32f4xx_hal.h"
-#include "Action.hpp"
 #include "std_math.hpp"
 #include "motor_dji.hpp"
 #include "System.hpp"
@@ -30,37 +29,6 @@ class ChasAPIHandle
     
     bool Reached = false;     // 是否到达目标位置
 };
-
-
-// class MoveAct : public BaseAction
-// {
-//     private:
-//         // 基于内部选择的移动方式
-//         bool MoveAt();
-//         bool MoveAlong();
-
-//     public:
-//         Vec2 target_pos = Vec2(0, 0);   // 目标位置，单位m，场地坐标系
-//         float max_velo = 1.0f;          // 最大速度，单位m/s
-//         float max_accel = 2.0f;         // 最大加速度，单位m/s^2
-
-//         typedef enum
-//         {
-//             AtPos,          // 移动到指定位置
-//             AlongPath,      // 沿指定路径移动
-//         }MoveType;
-        
-//         // 设置移动动作类型
-//         MoveType movetype = AtPos;
-//         // 构造函数
-//         MoveAct(){};
-        
-//         // 覆写虚函数
-//         virtual bool OnUpdate() override;
-//         // 重置参数
-//         void Reset(Vec2 new_target);
-// };
-
 
 /**
  * @brief 底盘类
@@ -159,16 +127,6 @@ class ChassisType : public Application
 
         void MoveAt(Vec2 Pos);
         void RotateAt(float yaw);
-        // const ChasAPIHandle& MoveAt(Vec2 Pos);
-        
-        /**         抛出接口    (Launch)        **/
-        /// @brief 相对当前位置移动
-        BaseAction* MoveLocal(Vec2 Pos);
-        /// @brief 移动到 指定位置
-        // BaseAction* MoveAt(Vec2 Pos);
-        BaseAction* MoveAt(Vec2 Pos, float MaxVelo, float MaxAccel);
-        /// @brief 沿路径移动
-        BaseAction* MoveAlong(Path path_t);
 };
 
 

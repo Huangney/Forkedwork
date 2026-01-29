@@ -20,15 +20,15 @@ void SystemType::Init(bool Sc)
     DWT_Init(CPU_HERT_C_BOARD_MHZ);
 
     // 初始化Monitor监视器
-    Monitor::GetInstance().Init(Hardware.huart_host, nullptr, false);
+    Monitor::GetInstance().Init(Hardware::huart_host, nullptr, false);
 
     // 初始化系统灯带
-    sys_ledband.Init(Hardware.htim_led, TIM_CHANNEL_1, 13);
+    sys_ledband.Init(Hardware::htim_led, TIM_CHANNEL_1, 13);
     // 颜色偏置因子（用于校正颜色）
     sys_ledband.BiasFactor = Vec3(0.843f, 1.0f, 0.843f); 
 
     farcon.init(&huart3);
-    odometer->Init(Hardware.huart_odom, true, false, false, true);
+    odometer->Init(Hardware::huart_odom, true, false, false, true);
     // 自动开始自检
     if (Sc) status = Systems::SELF_CHECK;
 }
