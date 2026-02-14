@@ -5,17 +5,19 @@
  */
 #pragma once
 #include "motor_dji_driver.hpp"
-#include "pids.hpp"
-#include "adrc.hpp"
+#include "loop_ctrler.hpp"
+#include "std_math.hpp"
+// #include "pids.hpp"
+// #include "adrc.hpp"
 
 #define ABS(x) ((x > 0) ? (x) : (-x))
 
 
 typedef enum
 {
-	None,
-	Speed,
-	Pos,
+	NoneC,
+	SpeedC,
+	PosC,
 }MotorDJIMode;
 
 
@@ -33,7 +35,6 @@ typedef enum
 class MotorDJI
 {
 private:
-
 	/// @brief 电流限幅		
 	uint16_t _current_limit = 14800;
 	/// @brief 速度限幅 	(减速比前的RPM)
@@ -48,16 +49,8 @@ private:
 	// float idtf_coeff = 0.1f;
 
 	/** 	  方法		**/
-
+	/// @brief 电机闭环控制计算
 	void _CalcLoop();
-
-	/// @brief 电机速度环控制 
-	// void _MotorDJI_SpeedLoop();
-	// void _MotorDJI_ADRCSpdLoop();
-
-	/// @brief 电机位置环控制
-	// void _MotorDJI_PosLoop();
-	// void _MotorDJI_ADRCPosLoop();
 
 	/// @brief 自整定过程
 	// void SelfIdentify();
@@ -67,7 +60,7 @@ public:
 	MotorDJI_Driver entity;
 
 	/** 	  方法		**/
-	void Init(CAN_HandleTypeDef *hcan, uint8_t motorESC_id, MotorDJIMode djimode);
+	void Init(CAN_HandleTypeDef *hcan, uint8_t motorESC_id);
 
 	// void Dynamicle(MotorIdentifyIntensity intensity);
 
@@ -81,8 +74,10 @@ public:
 	static float AmpToICode(uint16_t I_Ampere);
 
 	/** 	控制用变量	**/
-	Pids speed_pid; 					// 速度环PID
-	Pids position_pid; 					// 位置环PID
+	// Pids speed_pid; 					// 速度环PID
+	// Pids position_pid; 					// 位置环PID
+
+	LoopCtrler ctrler;						 
 
 	float targ_position = 0;			// 目标位置
 	float targ_speed = 0;		    	// 目标速度
@@ -90,7 +85,7 @@ public:
 
 
 	/**		属性类变量	**/
-	MotorDJIMode mode = None_Control;	// 电机当前控制模式
+	MotorDJIMode mode = NoneC;	// 电机当前控制模式
 
 
 	/**		测试用		**/

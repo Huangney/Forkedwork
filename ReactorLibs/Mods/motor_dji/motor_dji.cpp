@@ -18,27 +18,25 @@ float MotorDJI_SlopeLim(float& cur, float& cur_temp, float slope_value, float dt
  * @brief C620 / C610 电机额外初始化
  * @param Esc_Id 电机 ID（请查看C620 / C610说明书，注意其从 1 开始！）
  */
-void MotorDJI::Init(CAN_HandleTypeDef *hcan, uint8_t motorESC_id, MotorDJIMode djimode)
+void MotorDJI::Init(CAN_HandleTypeDef *hcan, uint8_t motorESC_id)
 {
 	entity.Init(hcan, motorESC_id); 	// 初始化电机实体
-	mode = djimode; 					// 设置控制模式
 }
 
 /// @brief 设置速度
 /// @param rpm 
 void MotorDJI::SetSpeed(float rpm, float redu_ratio)
 {
-	if (mode != PID_SpeedControl && mode != ADRC_SpeedControl) return; 	// 不是速度模式就不执行
+	if (mode != SpeedC) return; 	// 不是速度模式就不执行
 	targ_speed = rpm;
 }
 /// @brief 设置位置
 /// @param pos 
 void MotorDJI::SetPos(float pos)
 {
-	if (mode != PID_PosControl && mode != ADRC_PosControl) return; 	// 不是位置模式就不执行
+	if (mode != PosC) return; 	// 不是位置模式就不执行
 	targ_position = pos;
 }
-
 
 /**
  * @brief 空档
@@ -49,14 +47,14 @@ void MotorDJI::SetPos(float pos)
 void MotorDJI::Neutral()
 {
 	targ_current = 0;
-	mode = None;
+	mode = NoneC;
 }
 
 int16_t MotorDJI::Control()
 {
 	if (entity.enabled)
 	{
-		if (mode == None)
+		if (mode == NoneC)
 		{
 			targ_current = 0; 				// 目标电流清零
 		}
@@ -75,15 +73,12 @@ int16_t MotorDJI::Control()
 
 void MotorDJI::_CalcLoop()
 {
-	// 获取测量结构体
-	moto_measure_t *ptr = &entity.measure;
-
 	// 期望值 / 参考输入（国际单位制）
 	float targ_value = 0;
 
 	// 计算目标值的国际单位制
-	if (mode == Speed)	targ_value = StdMath::RpmToRadS(targ_speed);
-	else if (mode == Pos) targ_value = AngCodeToRad((uint16_t)targ_position);
+	if (mode == SpeedC)	targ_value = StdMath::RpmToRadS(targ_speed);
+	else if (mode == PosC) targ_value = AngCodeToRad((uint16_t)targ_position);
 	
 	// 调用控制器，得到控制电流（单位：A）
 	float cur_temp = ctrler.Calc(targ_value);

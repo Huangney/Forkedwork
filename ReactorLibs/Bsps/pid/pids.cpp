@@ -336,7 +336,6 @@ float PidGeneral::GetDt()
 
 
 /***        前馈控制函数        ***/
-
 /**
  * @brief 速度前馈控制器
  * @details 假设被控对象的传递函数为 标准一阶惯性环节 G(s) = K / (T*s + 1)
