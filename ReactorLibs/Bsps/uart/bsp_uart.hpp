@@ -1,71 +1,101 @@
-#ifndef BSP_UART_H
-#define BSP_UART_H
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-
+#pragma once
 #include "bsp_halport.hpp"
+#include <cstdint>
 
 /**
- * @brief 串口工作模式定义
- * @note 对应了三种
+ * @brief 发送缓冲区大小
+ * 控制发送环形缓冲区的大小。
+ * 超过此大小 + 当前正在发送的数据将被丢弃或根据实现被阻塞（此处为丢弃）。
  */
-typedef enum
-{
-    BspUartType_Normal,
-    BspUartType_IT,
-    BspUartType_DMA,
-}BspUart_TypeDef;
-
-
-
-// 定义接收回调函数类型
-typedef void (*BspUart_InstRxCallback)(UART_HandleTypeDef *huart, uint8_t *rxData, uint8_t size);
-
-// 发送缓冲区大小
 #define BSP_UART_TX_BUF_SIZE 2048
+#define BSP_UART_RX_BUF_SIZE 64
 
-// 发送数据结构体，用于多实例共享
-typedef struct
+namespace BSP
 {
-    uint8_t buffer[BSP_UART_TX_BUF_SIZE];          // 发送环形缓冲区
-    volatile uint16_t head;                        // 缓冲区头指针（写入位置）
-    volatile uint16_t tail;                        // 缓冲区尾指针（读取位置）
-    volatile uint8_t is_busy;                      // 发送忙标志
-    volatile uint16_t sending_len;                  // 当前正在发送的长度
-}BspUart_TxData;
+    namespace UART
+    {
+        // 预定义实例
+        class Instance;
+        class Handler;
 
-// 串口实例及其句柄定义
-typedef struct
-{
-    UART_HandleTypeDef *huart;                      // 串口句柄
-    BspUart_TypeDef rxtype;                         // Rx工作模式
-    BspUart_TypeDef txtype;                         // Tx工作模式
-    BspUart_InstRxCallback rx_callback;             // 接收回调函数
+        // 接收回调函数类型
+        using RxCallback = void (*)(UART_HandleTypeDef *huart, uint8_t *rxData, uint8_t size);
 
-    uint8_t rx_buffer[64];                          // 接收缓冲区（最大64Byte）
-    uint8_t rx_byte;                                // 单次接收的字节数，IT模式下始终为1    
-    uint8_t rx_setlen;                              // 期望接收数据长度
-    uint8_t rx_len;                                 // 实际接收数据长度
+        /// @brief 申请一个 UART 实例
+        Handler Apply(UART_HandleTypeDef *huart);
 
-    // 发送缓冲区指针（支持共享）
-    BspUart_TxData *tx_data;                        // 您的TX缓冲区/状态机
-}BspUart_Instance;
+        class Handler
+        {
+        public:
+            Handler(Instance *inst = nullptr);
 
+            /// @brief 发送数据（DMA + FIFO）
+            void Transmit(const uint8_t *data, uint16_t len);
 
-void BspUart_InstRegist(BspUart_Instance *inst, UART_HandleTypeDef *huart, uint8_t rx_setlen,
-                        BspUart_TypeDef rxtype, BspUart_TypeDef txtype, BspUart_InstRxCallback rx_callback,
-                        BspUart_TxData *tx_data_storage);
+            /// @brief 注册接收回调（实例级，仅允许一次）
+            bool RegisterRx(uint16_t rx_setlen, RxCallback rx_callback);
 
-void BspUart_Transmit(BspUart_Instance inst, uint8_t *data, uint8_t len);
-void BspUart_Transmit_DMA(UART_HandleTypeDef* huart, uint8_t *data, uint8_t len);
+            bool IsValid() const;
 
+        private:
+            Instance *instance_;
+        };
 
+        /**
+         * @brief UART 实例类
+         * @note 每个实例唯一对应一个硬件 UART
+         */
+        class Instance
+        {
+        public:
+            /*---   接口    ---*/
+            Instance();
 
+            /// @brief 构造函数
+            /// @param huart 目标硬件串口
+            explicit Instance(UART_HandleTypeDef *huart);
 
+            /// @brief 重置并初始化实例
+            void Init(UART_HandleTypeDef *huart);
 
-#ifdef __cplusplus
+            /// @brief 发送串口数据（带缓冲，默认DMA）
+            void Transmit(const uint8_t *data, uint16_t len);
+
+            /// @brief 注册接收回调（实例级，仅允许一次）
+            bool RegisterRx(uint16_t rx_setlen, RxCallback rx_callback);
+
+            bool IsUsing(UART_HandleTypeDef *target_huart) const;
+
+            /// @brief HAL UART DMA发送完成回调入口
+            void OnTxCplt();
+
+            /// @brief HAL UART DMA接收事件回调入口
+            void OnRxEvent(uint16_t size);
+
+            /*---   成员变量    ---*/
+            /// @brief 本实例对应的硬件 UART 句柄
+            UART_HandleTypeDef *huart;
+
+            /// @brief 本实例对应的接收回调函数
+            RxCallback rx_callback;
+
+        private:
+            struct TxFIFO
+            {
+                uint8_t buffer[BSP_UART_TX_BUF_SIZE];
+                volatile uint16_t head;
+                volatile uint16_t tail;
+                volatile uint16_t sending_len;
+                volatile uint8_t is_busy;
+            };
+
+            void TryStartTxDMA();
+
+            TxFIFO tx_fifo_;
+            uint8_t rx_buffer_[BSP_UART_RX_BUF_SIZE];
+            uint16_t rx_setlen_;
+            uint8_t rx_registered_;
+        };
+    }
+    
 }
-#endif
-#endif

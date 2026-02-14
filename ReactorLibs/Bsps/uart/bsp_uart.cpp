@@ -1,252 +1,390 @@
 #include "bsp_uart.hpp"
+#include "bsp_log.hpp"
 #include "string.h"
+using namespace BSP::UART;
 
-#define BSPUART_MAX_CANINSTS 6          // 最多支持6个串口实例
+/// @brief 最大实例数量，取决于实际使用的 UART 数
+static constexpr uint8_t max_bspuart_inst_nums = 6;
 
+/// @brief 用于存储 UART 实例的静态数组和计数器
+static Instance insts[max_bspuart_inst_nums];
 
-/// @brief 收集记录所有实例，便于管理（static化避免外部调用）
-static BspUart_Instance *bspuart_insts[BSPUART_MAX_CANINSTS] = {NULL};
-static int bspuart_inst_count = 0; // 当前实例数量
+/// @brief 已经创建的实例数量
+static uint8_t instance_count = 0;
 
-
-/// @brief 注册一个串口实例
-/// @param inst 实例指针
-/// @param huart 所用串口
-/// @param type 工作模式：普通、IT、DMA
-/// @param rx_callback 响应触发的回调函数（一个Uart通道只允许一个实例存在，自然也只允许一个回调函数存在）
-/// @param tx_data_storage TX缓冲区存储空间（若该串口已被其他实例注册，则可传NULL以共享缓冲区）
-void BspUart_InstRegist(BspUart_Instance *inst, UART_HandleTypeDef *huart, uint8_t rx_setlen,
-                        BspUart_TypeDef rxtype, BspUart_TypeDef txtype, BspUart_InstRxCallback rx_callback,
-                        BspUart_TxData *tx_data_storage)
+/**
+ * @brief 根据 UART 句柄查找对应的实例
+ */
+static Instance *FindInstByHuart(UART_HandleTypeDef *huart)
 {
-    // 检验参数有效性
-    if (inst == NULL || huart == NULL) return; // 参数无效
-
-    // 初始化实例基本参数
-    inst->huart = huart;
-    inst->rxtype = rxtype;
-    inst->txtype = txtype;
-    inst->rx_callback = rx_callback;
-    inst->tx_data = NULL; // 先置空
-
-    // 检查是否已有相同通道的实例，如果有，则共享其 TX Data
-    for (int i = 0; i < bspuart_inst_count; i++)
+    if (huart == NULL)
     {
-        if (bspuart_insts[i]->huart == huart)
+        return nullptr;
+    }
+
+    for (uint8_t i = 0; i < instance_count; i++)
+    {
+        if (insts[i].IsUsing(huart))
         {
-            // 发现已有实例注册了此huart
-            if (bspuart_insts[i]->tx_data != NULL)
-            {
-                // 共享已有的发送缓冲区
-                inst->tx_data = bspuart_insts[i]->tx_data;
-            }
-            break; // 只要找到一个就可以（假设它们都共享同一个）
+            return &insts[i];
         }
     }
 
-    // 如果未找到共享缓冲区，且用户提供了存储空间，则初始化新缓冲区
-    if (inst->tx_data == NULL && tx_data_storage != NULL)
-    {
-        inst->tx_data = tx_data_storage;
-        
-        // 初始化TX状态
-        inst->tx_data->head = 0;
-        inst->tx_data->tail = 0;
-        inst->tx_data->is_busy = 0;
-        inst->tx_data->sending_len = 0;
-        memset(inst->tx_data->buffer, 0, sizeof(inst->tx_data->buffer));
-    }
-
-    // 清空接收缓冲区
-    memset(inst->rx_buffer, 0, sizeof(inst->rx_buffer));
-    // 期望接收数据长度，也是DMA的最大长度，DMA模式下达到本长度将触发全满中断
-    inst->rx_setlen = rx_setlen;        
-
-    // 根据工作模式，配置接收中断
-    if (rxtype == BspUartType_IT)
-    {
-        HAL_UART_Receive_IT(huart, &inst->rx_byte, 1);
-    }
-    else if (rxtype == BspUartType_DMA)
-    {
-        HAL_UARTEx_ReceiveToIdle_DMA(huart, inst->rx_buffer, rx_setlen);
-        __HAL_DMA_DISABLE_IT(huart->hdmarx, DMA_IT_HT);
-    }
-
-    // 记录实例
-    if (bspuart_inst_count < BSPUART_MAX_CANINSTS)
-    {
-        // 允许同一通道多次注册（为了支持不同的Rx回调或共享Tx）
-        bspuart_insts[bspuart_inst_count++] = inst;
-    }
+    return nullptr;
 }
 
-
-void BspUart_Transmit(BspUart_Instance inst, uint8_t *data, uint8_t len)
+/**
+ * @brief 申请一个 UART 实例句柄
+ */
+Handler BSP::UART::Apply(UART_HandleTypeDef *huart)
 {
-    if (inst.huart == NULL || data == NULL || len == 0) return; // 参数无效
+    // 确保不是空的 UART 句柄
+    if (huart == NULL)
+    {
+        BspLog_LogError("[Bsp] Empty UartHandle When Apply!\n");
+        return Handler(nullptr);
+    }
 
-    // 根据其txtype发送数据
-    if (inst.txtype == BspUartType_Normal)
+    // 看看是否已经存在该Uart的实例
+    Instance *exist_inst = FindInstByHuart(huart);
+
+    // 如果已经存在，直接返回对应的 Handler
+    if (exist_inst != nullptr)
     {
-        HAL_UART_Transmit(inst.huart, data, len, 100); // 普通模式，阻塞发送
+        return Handler(exist_inst);
     }
-    else if (inst.txtype == BspUartType_IT)
+
+    // 如果实例数量已达上限，无法创建新实例
+    if (instance_count >= max_bspuart_inst_nums)
     {
-        HAL_UART_Transmit_IT(inst.huart, data, len);   // IT模式，非阻塞发送
+        BspLog_LogError("[Bsp] Too Many Uart Instance!\n");
+        return Handler(nullptr);
     }
-    else if (inst.txtype == BspUartType_DMA)
-    {
-        HAL_UART_Transmit_DMA(inst.huart, data, len);  // DMA模式，非阻塞发送
-    }
-    else
-    {
-        Error_Handler(); // 未知模式，进入软件错误中断
-    }
+    
+    // 初始化新实例
+    insts[instance_count].Init(huart);
+
+    // 返回新实例的 Handler
+    Instance *new_inst = &insts[instance_count];
+    instance_count++;
+    return Handler(new_inst);
 }
 
-void BspUart_Transmit_DMA(UART_HandleTypeDef* huart, uint8_t *data, uint8_t len)
+Handler::Handler(Instance *inst) : instance_(inst)
 {
-    if (huart == NULL || data == NULL || len == 0) return; // 参数无效
+}
 
-    // 查找实例
-    BspUart_Instance *inst = NULL;
-    for (int i = 0; i < bspuart_inst_count; i++)
+void Handler::Transmit(const uint8_t *data, uint16_t len)
+{
+    // 确保不是无效调用
+    if (instance_ == nullptr)
     {
-        if (bspuart_insts[i]->huart == huart)
-        {
-            inst = bspuart_insts[i];
-            break;
-        }
-    }
-
-    // 如果未找到实例，或该实例无缓冲支持（共享的TxData为NULL），回退到直接HAL调用应
-    if (inst == NULL || inst->tx_data == NULL)
-    {
-        HAL_UART_Transmit_DMA(huart, data, len);  // DMA模式，非阻塞发送
+        BspLog_LogWarning("[Bsp] Invalid Transmit, Empty Handler!\n");
         return;
     }
 
-    // 找到实例，使用缓冲发送逻辑
-    // 关中断保护 FIFO 操作
-    __disable_irq();
+    instance_->Transmit(data, len);
+}
 
-    BspUart_TxData *tx = inst->tx_data; // 便捷指针
-
-    // 1. 将数据压入 FIFO
-    for(int i=0; i<len; i++)
+bool Handler::RegisterRx(uint16_t rx_setlen, RxCallback rx_callback)
+{
+    // 确保不是无效调用
+    if (instance_ == nullptr)
     {
-        uint16_t next_head = (tx->head + 1) % BSP_UART_TX_BUF_SIZE;
-        if(next_head != tx->tail) // 缓冲区未满
-        {
-            tx->buffer[tx->head] = data[i];
-            tx->head = next_head;
-        }
-        else
-        {
-            // 缓冲区满，丢弃后续数据
-            break; 
-        }
+        BspLog_LogWarning("[Bsp] Invalid RxRegist, Empty Handler!\n");
+        return false;
     }
 
-    // 2. 如果DMA空闲，启动发送
-    if(tx->is_busy == 0)
+    return instance_->RegisterRx(rx_setlen, rx_callback);
+}
+
+bool Handler::IsValid() const
+{
+    return (instance_ != nullptr);
+}
+
+/***---------    实例部分接口    ---------***/
+
+Instance::Instance()
+{
+    Init(nullptr);
+}
+
+Instance::Instance(UART_HandleTypeDef *huart)
+{
+    Init(huart);
+}
+
+/**
+ * @brief 初始化实例，重置所有成员变量
+ */
+void Instance::Init(UART_HandleTypeDef *huart)
+{
+    this->huart = huart;
+    this->rx_callback = nullptr;
+    this->rx_setlen_ = 0;
+    this->rx_registered_ = 0;
+
+    this->tx_fifo_.head = 0;
+    this->tx_fifo_.tail = 0;
+    this->tx_fifo_.sending_len = 0;
+    this->tx_fifo_.is_busy = 0;
+
+    memset(this->tx_fifo_.buffer, 0, sizeof(this->tx_fifo_.buffer));
+    memset(this->rx_buffer_, 0, sizeof(this->rx_buffer_));
+}
+
+
+bool Instance::IsUsing(UART_HandleTypeDef *target_huart) const
+{
+    return (this->huart != NULL && this->huart == target_huart);
+}
+
+void Instance::Transmit(const uint8_t *data, uint16_t len)
+{
+    // 确保不是空调用
+    if (this->huart == NULL)
     {
-        if(tx->head != tx->tail)
-        {
-            tx->is_busy = 1;
-
-            // 计算本次最大连续发送长度（处理环形回绕）
-            uint16_t send_len = 0;
-            if(tx->head > tx->tail)
-            {
-                send_len = tx->head - tx->tail;
-            }
-            else
-            {
-                // tail 到 缓冲区末尾
-                send_len = BSP_UART_TX_BUF_SIZE - tx->tail;
-            }
-
-            tx->sending_len = send_len;
-            HAL_UART_Transmit_DMA(inst->huart, &tx->buffer[tx->tail], send_len);
-        }
+        BspLog_LogWarning("[Bsp] Invalid Transmit, Empty Instance!\n");
+        return;
+    }
+    if (data == NULL)
+    {
+        BspLog_LogWarning("[Bsp] Invalid Transmit, Empty Data Pointer!\n");
+        return;
+    }
+    if (len == 0)
+    {
+        BspLog_LogWarning("[Bsp] Invalid Transmit, Zero Length!\n");
+        return;
     }
 
-    __enable_irq();
+    // 将希望发送的数据写入FIFO缓冲区
+    for (uint16_t i = 0; i < len; i++)
+    {
+        // 计算下一个头部位置，检查是否会与尾部重叠（即缓冲区满）
+        uint16_t next_head = (uint16_t)((this->tx_fifo_.head + 1U) % BSP_UART_TX_BUF_SIZE);
+
+        // 如果下一个头部位置与尾部重叠，说明缓冲区已满，无法继续写入
+        if (next_head == this->tx_fifo_.tail)
+        {
+            BspLog_LogWarning("[Bsp] UART Tx FIFO Full, Data Lost!\n");
+            break;
+        }
+
+        // 写入数据并更新头部位置
+        this->tx_fifo_.buffer[this->tx_fifo_.head] = data[i];
+        this->tx_fifo_.head = next_head;
+    }
+
+    // 启用DMA发送（如果当前DMA空闲）
+    this->TryStartTxDMA();
+}
+
+/**
+ * @brief 注册接收回调函数，并启动DMA接收
+ * @param rx_setlen 期望接收数据长度，也是DMA的最大长度
+ * @param rx_callback 用户定义的接收回调函数
+ */
+bool Instance::RegisterRx(uint16_t rx_setlen, RxCallback rx_callback)
+{
+    // 确保参数有效
+    if (this->huart == NULL)
+    {
+        BspLog_LogWarning("[Bsp] RxRegist Failed, Empty Instance!");
+        return false;
+    }
+    if (rx_callback == nullptr)
+    {
+        BspLog_LogWarning("[Bsp] RxRegist Failed, Empty Callback!");
+        return false;
+    }
+    if (rx_setlen == 0)
+    {
+        BspLog_LogWarning("[Bsp] RxRegist Failed, Zero Length!");
+        return false;
+    }
+
+    // 每个实例只允许注册一次接收回调
+    if (this->rx_registered_ != 0)
+    {
+        BspLog_LogWarning("[Bsp] RxRegist Failed, This Uart Already has RxCallback!");
+        return false;
+    }
+
+    // 限制设置的接收长度不能超过缓冲区大小
+    if (rx_setlen > BSP_UART_RX_BUF_SIZE)
+    {
+        rx_setlen = BSP_UART_RX_BUF_SIZE;
+    }
+
+    // 保存回调函数和期望接收长度，并标记为已注册
+    this->rx_callback = rx_callback;
+    this->rx_setlen_ = rx_setlen;
+    this->rx_registered_ = 1;
+
+    // 启动DMA接收
+    memset(this->rx_buffer_, 0, sizeof(this->rx_buffer_));
+    if (HAL_UARTEx_ReceiveToIdle_DMA(this->huart, this->rx_buffer_, this->rx_setlen_) != HAL_OK)
+    {
+        BspLog_LogError("[Bsp] Try Enable HAL_IdleRxCallback_DMA, but Failed!");
+        this->rx_registered_ = 0;
+        this->rx_setlen_ = 0;
+        this->rx_callback = nullptr;
+        return false;
+    }
+
+    // 关闭DMA半满中断，避免在接收过程中被过早触发
+    if (this->huart->hdmarx != NULL)
+    {
+        __HAL_DMA_DISABLE_IT(this->huart->hdmarx, DMA_IT_HT);
+    }
+
+    return true;
+}
+
+/**
+ * @brief 尝试启动DMA发送，如果当前DMA空闲且FIFO中有数据
+ */
+void Instance::TryStartTxDMA()
+{
+    if (this->huart == NULL)
+    {
+        BspLog_LogWarning("[Bsp] Unable to Start Tx DMA, Empty Instance!\n");
+        return;
+    }
+
+    if (this->tx_fifo_.is_busy != 0)
+    {
+        // DMA正在发送中，等待当前发送完成后会自动检查并继续发送剩余数据
+        return;
+    }
+
+    if (this->tx_fifo_.head == this->tx_fifo_.tail)
+    {
+        // FIFO中没有数据需要发送
+        return;
+    }
+
+    // 计算本次最大连续发送长度（处理环形回绕）
+    uint16_t send_len = 0;
+
+    // 如果头部在尾部前面，直接计算差值
+    if (this->tx_fifo_.head > this->tx_fifo_.tail)
+    {
+        send_len = this->tx_fifo_.head - this->tx_fifo_.tail;
+    }
+    // 如果头部在尾部后面，说明环形回绕了，需要计算从尾部到缓冲区末尾的长度
+    else
+    {
+        send_len = BSP_UART_TX_BUF_SIZE - this->tx_fifo_.tail;
+    }
+
+    // 启动DMA发送
+    this->tx_fifo_.sending_len = send_len;
+
+    if (HAL_UART_Transmit_DMA(this->huart, &this->tx_fifo_.buffer[this->tx_fifo_.tail], send_len) == HAL_OK)
+    {
+        this->tx_fifo_.is_busy = 1;
+    }
+    else
+    {
+        BspLog_LogError("[Bsp] Failed to Start HAL_Tx_DMA!\n");
+        this->tx_fifo_.sending_len = 0;
+    }
+}
+
+/**
+ * @brief HAL UART DMA发送完成回调入口，更新FIFO状态并尝试发送剩余数据
+ */
+void Instance::OnTxCplt()
+{
+    // 确保不是空调用
+    if (this->huart == NULL)
+    {
+        BspLog_LogError("[Bsp] Meet Empty UartInst in TxCplt Callback!\n");
+        return;
+    }
+
+    // 更新FIFO状态，释放已发送的数据空间
+    this->tx_fifo_.tail = (uint16_t)((this->tx_fifo_.tail + this->tx_fifo_.sending_len) % BSP_UART_TX_BUF_SIZE);
+    this->tx_fifo_.sending_len = 0;
+
+    // 检查FIFO中是否还有数据需要发送，如果有则继续发送
+    if (this->tx_fifo_.head == this->tx_fifo_.tail)
+    {
+        this->tx_fifo_.is_busy = 0;
+        return;
+    }
+
+    // 计算下一段连续数据长度（处理环形回绕）
+    uint16_t send_len = 0;
+    if (this->tx_fifo_.head > this->tx_fifo_.tail)
+    {
+        send_len = this->tx_fifo_.head - this->tx_fifo_.tail;
+    }
+    else
+    {
+        send_len = BSP_UART_TX_BUF_SIZE - this->tx_fifo_.tail;
+    }
+
+    // 启动下一段DMA发送
+    this->tx_fifo_.sending_len = send_len;
+    if (HAL_UART_Transmit_DMA(this->huart, &this->tx_fifo_.buffer[this->tx_fifo_.tail], send_len) == HAL_OK)
+    {
+        this->tx_fifo_.is_busy = 1;
+    }
+    else
+    {
+        this->tx_fifo_.sending_len = 0;
+        this->tx_fifo_.is_busy = 0;
+    }
+}
+
+void Instance::OnRxEvent(uint16_t size)
+{
+    if (this->huart == NULL || this->rx_registered_ == 0 || this->rx_callback == nullptr)
+    {
+        return;
+    }
+
+    uint16_t real_size = size;
+    if (real_size > this->rx_setlen_)
+    {
+        real_size = this->rx_setlen_;
+    }
+
+    this->rx_callback(this->huart, this->rx_buffer_, real_size);
+
+    memset(this->rx_buffer_, 0, this->rx_setlen_);
+    HAL_UARTEx_ReceiveToIdle_DMA(this->huart, this->rx_buffer_, this->rx_setlen_);
+    if (this->huart->hdmarx != NULL)
+    {
+        __HAL_DMA_DISABLE_IT(this->huart->hdmarx, DMA_IT_HT);
+    }
 }
 
 
 
-
-/// @brief 覆写原DMA接收中断函数
-/// @param huart 
-/// @param Size 
+/****-------    覆写HAL库的中断函数     -------****/
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
-    // 遍历所有实例，根据huart通道，找到对应的实例
-    for (int i = 0; i < bspuart_inst_count; i++)
+    Instance *inst = FindInstByHuart(huart);
+    if (inst == nullptr)
     {
-        BspUart_Instance *inst = bspuart_insts[i]; // 取出实例
-        if (inst->huart == huart)
-        {
-            // 找到匹配的实例，调用其接收回调函数
-            if (inst->rx_callback != NULL)
-            {
-                inst->rx_len = Size;                                // 记录实际接收长度
-                inst->rx_callback(huart, inst->rx_buffer, Size);    // 调用用户定义的回调函数
-            }
-            // 执行后清空缓冲区
-            memset(inst->rx_buffer, 0, inst->rx_setlen);
-            // 重新使能DMA接收 并 关闭半满中断
-            HAL_UARTEx_ReceiveToIdle_DMA(huart, inst->rx_buffer, inst->rx_setlen);
-            __HAL_DMA_DISABLE_IT(huart->hdmarx, DMA_IT_HT);
-        }
+        return;
     }
+
+    inst->OnRxEvent(Size);
 }
 
-/// @brief 发送完成回调，用于驱动环形缓冲区继续发送
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 {
-    // 遍历查找实例
-    for (int i = 0; i < bspuart_inst_count; i++)
+    Instance *inst = FindInstByHuart(huart);
+    if (inst == nullptr)
     {
-        BspUart_Instance *inst = bspuart_insts[i];
-        if (inst->huart == huart)
-        {
-            // 如果没有TxData，无法进行缓冲接续，直接返回
-            if (inst->tx_data == NULL) return;
-            
-            BspUart_TxData *tx = inst->tx_data;
-
-            // 更新 tail，释放已发送的空间
-            tx->tail = (tx->tail + tx->sending_len) % BSP_UART_TX_BUF_SIZE;
-            tx->sending_len = 0;
-
-            // 检查缓冲区是否还有数据
-            if(tx->head != tx->tail)
-            {
-                // 计算下一段连续数据长度
-                uint16_t send_len = 0;
-                if(tx->head > tx->tail)
-                {
-                    send_len = tx->head - tx->tail;
-                }
-                else
-                {
-                    send_len = BSP_UART_TX_BUF_SIZE - tx->tail;
-                }
-
-                tx->sending_len = send_len;
-                // 继续 DMA 发送
-                HAL_UART_Transmit_DMA(inst->huart, &tx->buffer[tx->tail], send_len);
-            }
-            else
-            {
-                // 无数据，标记为空闲
-                tx->is_busy = 0;
-            }
-            return; // 找到并处理后返回
-        }
+        return;
     }
+
+    inst->OnTxCplt();
 }

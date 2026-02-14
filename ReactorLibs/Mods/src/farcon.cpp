@@ -9,7 +9,13 @@ Farcon *Farcon::self_instance = nullptr;
 
 void Farcon::init(UART_HandleTypeDef *huart)
 {
-    BspUart_InstRegist(&this->uart_inst, huart, 17, BspUartType_DMA, BspUartType_Normal, Farcon_RxCallback);
+    // 注册串口实例
+    uart_inst = BSP::UART::Apply(huart);
+
+    // 注册接收回调
+    uart_inst.RegisterRx(17, Farcon_RxCallback); 
+
+    // BspUart_InstRegist(&this->uart_inst, huart, 17, BspUartType_DMA, BspUartType_Normal, Farcon_RxCallback);
 }
 // 回传数据，告诉遥控器当前主控状态以及其要求
 void Farcon::Farcon_Back_message(Farcon *farcon_instance)

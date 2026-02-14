@@ -136,7 +136,7 @@ StateBlock& StateCore::GetCurState()
 void StateCore::CoreGraph(const StateGraph& graph)
 {
     uint8_t buf[60];
-    BspUart_Transmit(Monitor::GetInstance().host_coder.uart_inst, (uint8_t *)"StateGraph\n", 11);
+    // BspUart_Transmit(Monitor::GetInstance().host_coder.uart_inst, (uint8_t *)"StateGraph\n", 11);
 
     HAL_Delay(10);
     for (uint8_t i = 0; i < graph.stateNums; i++)
@@ -145,7 +145,7 @@ void StateCore::CoreGraph(const StateGraph& graph)
         for (uint8_t j = 0; j < graph.states[i].linkNums; j++)
         {
             int len = snprintf((char *)buf, 48, "%s --> %s\n", graph.states[i].name, graph.states[i].links[j].nextState->name);
-            BspUart_Transmit(Monitor::GetInstance().host_coder.uart_inst, buf, len);
+            // BspUart_Transmit(Monitor::GetInstance().host_coder.uart_inst, buf, len);
             HAL_Delay(10);
         }
     }

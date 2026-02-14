@@ -68,7 +68,8 @@ private:
     // 只与数据有关，安全
 public:
     uint32_t timestamp;
-    BspUart_Instance uart_inst;
+    BSP::UART::Handler uart_inst;
+
     Farcon()
     {
         self_instance = this; 

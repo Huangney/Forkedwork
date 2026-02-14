@@ -37,6 +37,8 @@ static void Process_Command(char *cmd_str);
 static shell_cmd_t cmd_table[MAX_SHELL_CMDS];
 static uint8_t cmd_count = 0;
 
+// 提前获取 UART 句柄，用于后续日志输出
+BSP::UART::Handler uart_log_handler;
 
 void BspLog_Init(void)
 {
@@ -45,21 +47,22 @@ void BspLog_Init(void)
     SEGGER_RTT_ConfigUpBuffer(0, NULL, NULL, 0, SEGGER_RTT_MODE_NO_BLOCK_SKIP);
     
     // 先打一个简单的字符串确认链路
-
     BspLog_LogOK("RTT System Online\r\n");
+
+    // 如果确定使用 UART 输出日志，可以在这里获取 huart_host 的句柄
+    if (Hardware::RTTLogAtUart)
+    {
+        uart_log_handler = BSP::UART::Apply(Hardware::huart_host);
+    }
 }
 
 /**
  * @warning 串口日志发送
- * 注意：BspUart_Transmit_DMA 在 BspUart 库中已实现 FIFO 缓冲 (前提是 huart_host 已注册为 BspUart 实例)
- * 此时 log_tx_buf 仅作为临时的格式化缓冲区，BspUart 会将其拷贝到内部环形缓冲区，
- * 因此这里即使连续调用也是安全的，不会发生由于 DMA 忙导致的数据覆盖。
- * 若 huart_host 未注册，则 BspUart 会回退到无缓冲模式，仍有丢数据风险。
  */
-static char log_tx_buf[512]; // 稍微加大一点缓冲区防止长日志截断
+static char log_tx_buf[96]; // 稍微加大一点缓冲区防止长日志截断
 static void LogToUart(const char* prefix, const char* fmt, va_list args)
 {
-    if (Hardware::LogAtUart && Hardware::huart_host)
+    if (Hardware::RTTLogAtUart && Hardware::huart_host)
     {
         int len = 0;
         int max_len = 511; // 留一个位置给 \0
@@ -78,7 +81,8 @@ static void LogToUart(const char* prefix, const char* fmt, va_list args)
 
         if (len > 0)
         {
-             BspUart_Transmit_DMA(Hardware::huart_host, (uint8_t*)log_tx_buf, (uint8_t)len);
+            // BspUart_Transmit_DMA(Hardware::huart_host, (uint8_t*)log_tx_buf, (uint8_t)len);
+            uart_log_handler.Transmit((uint8_t*)log_tx_buf, (uint8_t)len);
         }
     }
 }
