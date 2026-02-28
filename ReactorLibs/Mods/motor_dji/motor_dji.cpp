@@ -56,25 +56,122 @@ void MotorDJI::Uneutral()
 	position_pid.Reset();
 }
 
-void MotorDJI::ConfigPID()
+MotorDJI& MotorDJI::ConfigPID()
 {
-	// 为 M3508 / M2006 设置一组保守的默认参数
-	// 参数已经按照输出控制量为 安培(A) 缩放（除以 819.2 = 16384/20）
-	speed_pid.Init(0.015f, 0.0001f, 0.0f);
-	speed_pid.SetLimit(2.4f, 20.0f, 0.9f); // 积分限幅 2.4A，输出限幅严格为 20.0A
-
-	position_pid.Init(0.5f, 0.0f, 0.0f);
-	position_pid.SetLimit(100.0f, 300.0f, 0.9f); // 输出为速度 (RPM)
-
-	_ctrl_configured = true;
+	_ctrl_configured = false; 	// 重新配置时先锁定
+	_config_mask = 0;
+	_is_adrc_config = false;
+	use_adrc = false;
+	return *this;
 }
 
-void MotorDJI::ConfigADRC()
+MotorDJI& MotorDJI::ConfigADRC()
 {
-	// ADRC 参数配置示例（以3508为例）
-	// motor_adrc.Init(ADRC::Sec_Ord, 100.0f, 50.0f, 2.41e-5f, 0.0f, 0.3f, _dt, 20.0f);
-	
+	_ctrl_configured = false;
+	_config_mask = 0;
+	_is_adrc_config = true;
+	use_adrc = true;
+	return *this;
+}
+
+MotorDJI& MotorDJI::AsSpeedC()
+{
+	mode = SpeedC;
+	_config_mask |= (1 << 0);
+	return *this;
+}
+
+MotorDJI& MotorDJI::AsPosC()
+{
+	mode = PosC;
+	_config_mask |= (1 << 0);
+	return *this;
+}
+
+MotorDJI& MotorDJI::SPD_PID(float kp, float ki, float kd)
+{
+	speed_pid.Init(kp, ki, kd);
+	_config_mask |= (1 << 1);
+	return *this;
+}
+
+MotorDJI& MotorDJI::SPD_Limit(float i_lim, float out_lim)
+{
+	speed_pid.SetLimit(i_lim, out_lim, 0.9f);
+	_config_mask |= (1 << 2);
+	return *this;
+}
+
+MotorDJI& MotorDJI::POS_PID(float kp, float ki, float kd)
+{
+	position_pid.Init(kp, ki, kd);
+	_config_mask |= (1 << 3);
+	return *this;
+}
+
+MotorDJI& MotorDJI::POS_Limit(float i_lim, float out_lim)
+{
+	position_pid.SetLimit(i_lim, out_lim, 0.9f);
+	_config_mask |= (1 << 4);
+	return *this;
+}
+
+MotorDJI& MotorDJI::ADRC_BW(float wo, float wc)
+{
+	motor_adrc.kp = wc * wc;
+	motor_adrc.kd = 2.0f * wc;
+	motor_adrc.eso.UpdateOmega_O(wo);
+	_config_mask |= (1 << 5);
+	return *this;
+}
+
+MotorDJI& MotorDJI::ADRC_Inertia(float J, float Kt, float B)
+{
+	motor_adrc.J = J;
+	motor_adrc.Kt = Kt;
+	motor_adrc.B = B;
+	// 重新计算相关的 b0 指标
+	motor_adrc.eso.J = J;
+	motor_adrc.eso.b0 = Kt / J;
+	_config_mask |= (1 << 6);
+	return *this;
+}
+
+void MotorDJI::Apply()
+{
+	if (!(_config_mask & (1 << 0))) {
+		BspLog_LogError("MotorDJI: Mode not specified (AsSpeedC/AsPosC)!");
+		return;
+	}
+
+	if (!_is_adrc_config) {
+		// --- PID 校验 ---
+		if (mode == SpeedC) {
+			if (!(_config_mask & (1 << 1)) || !(_config_mask & (1 << 2))) {
+				BspLog_LogError("MotorDJI: Speed Loop PID or Limit not set!");
+				return;
+			}
+		} else if (mode == PosC) {
+			bool pos_ok = (_config_mask & (1 << 3)) && (_config_mask & (1 << 4));
+			bool spd_ok = (_config_mask & (1 << 1)) && (_config_mask & (1 << 2));
+			if (!pos_ok || !spd_ok) {
+				BspLog_LogError("MotorDJI: Cascade PID requires BOTH Pos and Speed loop config!");
+				return;
+			}
+		}
+	} else {
+		// --- ADRC 校验 ---
+		if (!(_config_mask & (1 << 5)) || !(_config_mask & (1 << 6))) {
+			BspLog_LogError("MotorDJI: ADRC BW or Inertia not set!");
+			return;
+		}
+		// 根据模式初始化 ADRC 内部阶次
+		if (mode == SpeedC) motor_adrc.Init(ADRC::Sec_Ord, motor_adrc.eso._base_omega_o, sqrtf(motor_adrc.kp), motor_adrc.J, motor_adrc.B, motor_adrc.Kt, _dt, motor_adrc.max_current);
+		else if (mode == PosC) motor_adrc.Init(ADRC::Thr_Ord, motor_adrc.eso._base_omega_o, sqrtf(motor_adrc.kp), motor_adrc.J, motor_adrc.B, motor_adrc.Kt, _dt, motor_adrc.max_current);
+	}
+
 	_ctrl_configured = true;
+	BspLog_LogSuccess("MotorDJI ID:%d Configured successfully.", motorESC_id);
 }
 
 void MotorDJI::PostDecodeCallback()

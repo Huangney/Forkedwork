@@ -32,34 +32,21 @@ float B = 1.56e-5f; // 阻尼系数
  */
 void MainFrameCpp()
 {
+    // 配置电机控制器 (新 Fluent API 示例)
+    test_motor_0.ConfigPID()
+                .AsPosC()
+                .SPD_PID(0.015f, 0.0001f, 0.0f)
+                .SPD_Limit(2.4f, 20.0f)
+                .POS_PID(0.5f, 0.0f, 0.0f)
+                .POS_Limit(100.0f, 300.0f)
+                .Apply();
+
     // 配置状态图为简并模式
     example_graph.Degenerate(Action_of_Dege);
     
     // 向状态机核心注册
     core.RegistGraph(example_graph);
     core.Enable(0);         // 启动状态机核心，指定初始状态图为0号图
-
-    // test_motor_0.Init(Hardware::hcan_main, 1, PID_PosControl);
-    
-    // test_motor_0.speed_pid.Init(10.0f, 0.0f, 0.0f);
-    // test_motor_0.position_pid.Init(0.035f, 0.0f, 0.0f);
-
-    // test_motor_0.motor_adrc.Init(ADRC::Sec_Ord, 15.0f, 2.7f, J, B, K_t, dt, 18.0f);
-    // test_motor_0.g_Identifier.b0_ = K_t / J;
-
-    // test_motor_0.Dynamicle(Fluid);                    // 启动电机的在线辨识
-    
-    // 配置跟踪器
-    // monit.Track(test_motor_0.motor_adrc.debug_current);      // 速度跟踪曲线
-    // monit.Track(test_motor_0.motor_adrc.debug_TL);
-
-    // monit.Track(test_motor_0.motor_adrc.debug_omega);        // 位置跟踪曲线
-    // monit.Track(test_motor_0.measure.total_angle);
-
-    // monit.Track(test_motor_0.g_Identifier.rho_ru);                 // 电机的转动惯量
-    // monit.Track(test_motor_0.g_Identifier.J_hat_);
-
-    // monit.Perflize();  // 切换高性能模式
 }
 
 void Action_of_Dege(StateCore* core)

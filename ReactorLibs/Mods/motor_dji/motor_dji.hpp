@@ -31,6 +31,10 @@ private:
 	float _dt = 0.001f;
 	/// @brief 是否已经配置过控制器
 	bool _ctrl_configured = false;
+	/// @brief 配置掩码，用于追踪配置进度
+	uint16_t _config_mask = 0;
+	/// @brief 当前配置是否为 ADRC
+	bool _is_adrc_config = false;
 
 	/** 	  方法		**/
 	/// @brief 电机闭环控制计算
@@ -44,10 +48,27 @@ public:
 
 	void SetDt(float dt) { _dt = dt; }
 
-	/// @brief 配置PID控制器参数
-	void ConfigPID();
-	/// @brief 配置ADRC控制器参数
-	void ConfigADRC();
+	/// @brief 配置PID控制器（开启链式调用）
+	MotorDJI& ConfigPID();
+	/// @brief 配置ADRC控制器（开启链式调用）
+	MotorDJI& ConfigADRC();
+
+	// --- 链式调用接口 ---
+	MotorDJI& AsSpeedC();
+	MotorDJI& AsPosC();
+	
+	MotorDJI& SPD_PID(float kp, float ki, float kd);
+	MotorDJI& SPD_Limit(float i_lim, float out_lim);
+	
+	MotorDJI& POS_PID(float kp, float ki, float kd);
+	MotorDJI& POS_Limit(float i_lim, float out_lim);
+
+	MotorDJI& ADRC_BW(float wo, float wc);
+	MotorDJI& ADRC_Inertia(float J, float Kt, float B = 0.0f);
+
+	/// @brief 应用配置并锁定
+	void Apply();
+	// ------------------
 
 	void SetSpeed(float rpm);
 	void SetPos(float pos);

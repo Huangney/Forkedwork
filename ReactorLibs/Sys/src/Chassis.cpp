@@ -9,7 +9,7 @@ void ChassisType::Start()
     // 初始化电机
     for (int i = 0; i < 4; i++)
     {
-        motors[i].Init(Hardware::hcan_main, i + 1, MotorDJIMode::PID_SpeedControl);
+        // motors[i].Init(Hardware::hcan_main, i + 1, MotorDJIMode::PID_SpeedControl);
         motors[i].speed_pid.Init(3.6, 2.4, 0.0);
         motors[i].speed_pid.ForwardLize(PidGeneral::SpeedForward, 1.5f, 5, 4.8); 			// 速度型前馈
         motors[i].Enable();
@@ -145,7 +145,7 @@ inline void ChassisType::_SendSpdToMotor()
     // 发送速度指令到电机
     for (int i = 0; i < 4; i++)
     {
-        motors[i].SwitchMode(MotorDJIMode::PID_SpeedControl);
+        // motors[i].SwitchMode(MotorDJIMode::PID_SpeedControl);
         motors[i].SetSpeed((_motor_spd[i] * 60.0f) / (PI * WHEEL_DIAMETER));
     }
 }
