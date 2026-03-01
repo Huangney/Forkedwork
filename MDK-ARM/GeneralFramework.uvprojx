@@ -924,6 +924,11 @@
               <FileType>8</FileType>
               <FilePath>..\Mods\src\farcon.cpp</FilePath>
             </File>
+            <File>
+              <FileName>farcon.cpp</FileName>
+              <FileType>8</FileType>
+              <FilePath>..\Mods\src\farcon.cpp</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>

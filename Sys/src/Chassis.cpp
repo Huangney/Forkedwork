@@ -3,6 +3,7 @@
 #include "Monitor.hpp"
 
 ChassisType& test_chas = ChassisType::GetInstance();
+extern Farcon farcon;
 
 void ChassisType::Start()
 {
@@ -19,7 +20,18 @@ void ChassisType::Start()
 void ChassisType::Update()
 {
     // 遥控器控制逻辑
-
+    if(farcon.toggle[1] == 0)
+    {
+        control_mode = FARCON;
+    }
+    if(control_mode == FARCON)
+    {
+        // 读取遥控器数据到底盘控制变量
+        targ_speed.x = -farcon.jy_data_origin[3]*1.0f / 100.f * _max_velo;   // 前后
+        targ_speed.y = -farcon.jy_data_origin[2]*1.0f / 100.f * _max_velo;   // 左右
+        targ_speed.z = -farcon.jy_data_origin[0]*1.0f / 100.f * _max_omega;  // 旋转
+        this->Move(targ_speed, 100);
+    }
 
     // 实现闭环的地方
     if (_walking || _is_pos_locked)
@@ -29,7 +41,7 @@ void ChassisType::Update()
     if (_rotating || _is_yaw_locked)
     {
         _Rotating();
-    }
+    } 
     
     // 将底盘的 速度targ_speed 上传到各个电机
     _UploadSpeed();

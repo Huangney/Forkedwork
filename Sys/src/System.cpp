@@ -24,7 +24,10 @@ void SystemType::Init(bool Sc)
 
     // 里程计初始化
     odometer.Init(&huart6, true, false, false, true);
+    
+    // 遥控器初始化
     farcon.init(&huart3);
+    
     // 自动开始自检
     if (Sc) status = Systems::SELF_CHECK;
 }

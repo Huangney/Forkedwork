@@ -15,7 +15,7 @@
 #include "std_cpp.h"
 #include "typeinfo"
 #include "Monitor.hpp"
-
+#include "farcon.hpp"
 namespace Systems
 {
     // 区分红方蓝方
@@ -156,6 +156,7 @@ public:
     bool system_start_to_work_flag = false;             // 系统开始工作标志位
 
     Odometer_Ops9           odometer;               // 物理里程计
+
 
 
     /// @brief 机器人全局位置，单位m，场地坐标系

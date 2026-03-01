@@ -38,15 +38,10 @@ typedef struct
     uint8_t rx_len;                                 // 实际接收数据长度
 }BspUart_Instance;
 
-
 void BspUart_InstRegist(BspUart_Instance *inst, UART_HandleTypeDef *huart, uint8_t rx_setlen,
                         BspUart_TypeDef rxtype, BspUart_TypeDef txtype, BspUart_InstRxCallback rx_callback);
 
 void BspUart_Transmit(BspUart_Instance inst, uint8_t *data, uint8_t len);
-
-
-
-
 
 #ifdef __cplusplus
 }

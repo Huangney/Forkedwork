@@ -30,9 +30,9 @@ void MainFrameCpp()
 
     System.RegistApp(chas);
     
-    grp.Degenerate(DegeAct);
-    core.RegistGraph(grp);
-    core.Enable(0);
+//     grp.Degenerate(DegeAct);
+//     core.RegistGraph(grp);
+//     core.Enable(0);
 }
 
 
