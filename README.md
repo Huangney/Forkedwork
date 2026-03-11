@@ -1,3 +1,9 @@
+> [!CAUTION]
+>  ***本分支已停止维护***
+> 
+> 这是电控框架的原始版本，当前，所有的功能库，都已经停止维护  
+> 如需体验最新功能，请前往 `V2` 主分支
+
 <div align="center" style="align-items: center; display: flex; justify-content: center; gap: 10px;">
     <img src="Imgs/UP70_LOGO_Ramp_Simp.png" alt="Up70" width="240">
     <img src="Imgs/Up70Art_Ramp.png" alt="Up70Char" width="240" height="120" >
